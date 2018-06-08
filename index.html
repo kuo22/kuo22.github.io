@@ -1,0 +1,192 @@
+<html>
+	<head>
+		<title>Project Map</title>
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+		<link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.1/dist/leaflet.css"/>
+	</head>
+
+	<body style="background-color: rgb(188, 219, 193)">
+		<script src="https://unpkg.com/leaflet@1.3.1/dist/leaflet.js"></script>
+		<script src="park.geojson"></script>
+		<script src="vet.geojson"></script>
+		<script src="route.geojson"></script>
+		<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js" integrity="sha384-KJ3o2DKtIkvYIK3UENzmM7KCkRr/rE9/Qpg6aAZGJwFDMVNA/GpGFF93hXpG5KkN" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+		<h1 class="text-center">Interactive Map for Dog Owners</h1>
+
+		<div id="map" class="border border-dark rounded" style="width: 1200px; height: 800px; margin: auto"></div>
+		<div style="margin-top: 1em">
+			<button class="btn btn-dark" style="margin-left: 20%" onclick="zoomToLayer()">Zoom to layer</button>
+			<button class="btn btn-dark" onclick="applyPark()">Show/Hide Parks</button>
+			<button class="btn btn-dark" onclick="applyVet()">Show/Hide Vets</button>
+		</div>
+		<div>
+			<div class="float-left mx-2 mt-4 px-2 border border-dark rounded bg-dark text-light" style="width:30%">
+				<h2>Map Purpose and Audience</h2>
+				<p>This map is intended primarily for dog owners. It shows the location of dog parks (or just parks that are good for walk dogs) and veterinary clinics in the Seattle region as well as providing the shortest walking route from each dog park to a clinic.  This could be useful for emergency situations that occurs during a walk with your dog such as fights with other dogs.  It can also be used as a general map for dog owners to decide what parks they want to visit in the area, as the user is given the ability to find further information about the park when hovering over the features.</p>
+			</div>
+
+			<div class="float-left mx-2 mt-4 px-2 border border-dark rounded bg-dark text-light" style="width:30%">
+				<h2>Cargographic Decisions</h2>
+				<p>Given the purpose of this map, the standard OpenStreetMap basemap synergizes with the information shown.  The basemap gives sufficient detail about streets, which is important for a map that's showing walking routes primarily on streets.  It also has good visual aesthetic suitable for casual map viewers, similar to Google Maps.  The parks shown are styled in green because it's a color most associated to nature, and paws with cross sign are used to represent vet clinics, which is a conventional symbol to represent animal clinics.  The walking route uses dark orange as a way to stand out from the usual white street background.</p>
+			</div>
+
+			<div class="float-left mx-2 mt-4 px-2 border border-dark rounded bg-dark text-light" style="width:30%">
+				<h2>New Capabilities</h2>
+				<p>This map features a few functionalities not taught in class.  As shown on the map, the marker icon is changed from the generic blue marker to another image file using Leaflet's <code>L.icon</code> function.  The hard-coded feature is also used to apply another new capability.  When zoomed out far enough, the existing information I want to show are hidden to prevent ugly clustering of features (detected using the <code>zoomed</code> event).  It's replaced by the hard-coded marker I created in the general area of Seattle.  When clicked, it will zoom the map to the area where the park and vet layer is located using the <code>fitBound</code> function.  Zooming to the location of interest can also be accessed by clicking on the "Zoom" button.</p>
+			</div>
+		</div>
+		<script>
+			var parkOff = false;
+			var vetOff = false;
+
+			var map = L.map('map', {center: [47.652332, -122.316310], zoom: 13});
+			L.tileLayer('https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token={accessToken}', {
+			attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, <a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+			maxZoom: 18,
+			id: 'mapbox.streets',
+			accessToken: 'pk.eyJ1Ijoia3VvMjIiLCJhIjoiY2pkeTY1M3c0MHduejJxbzE3NjZmdzhsNyJ9.UMETNS3SPlCrY2BmmIHQGA'
+			}).addTo(map);
+
+			var parkLayer = L.geoJson(parks, {style: parkStyle, onEachFeature: parkHover}).addTo(map);
+			var vetLayer = L.geoJson(vets, {pointToLayer: vetIcon, onEachFeature: vetHover}).addTo(map);
+			var routeLayer = L.geoJson(routes, {style: routeStyle, onEachFeature: routeHover}).addTo(map);
+
+			// Added hard-coded marker for zooming in to Seattle if zoom level is too low.
+			var seattle = L.marker([47.652332, -122.316310]).addTo(map).on('click', zoomToLayer);
+			
+			// Shows and hides certain layers at certain zoom levels
+			map.on('zoomend', function() {
+				if (map.getZoom() <= 9) {
+					map.removeLayer(parkLayer);
+					map.removeLayer(vetLayer);
+					map.removeLayer(routeLayer);
+					map.addLayer(seattle);
+				} else {
+					if (!parkOff) {
+						map.addLayer(parkLayer);
+					}
+					
+					if (!vetOff) {
+						map.addLayer(vetLayer);	
+					}
+
+					if (!parkOff && !vetOff) {
+						map.addLayer(routeLayer);
+					}
+					
+					map.removeLayer(seattle);
+				}
+			});
+			
+			function parkStyle(feature) {
+				return {
+					color: "green"
+				};
+			}
+
+			function parkOld(e) {
+				this.setStyle({color: "green"});
+			}
+
+			function parkNew(e) {
+				this.setStyle({color: "orange"});
+			}
+			
+			// Gives park polygons popups when hovered over.
+			function parkHover(feature, layer) {
+				layer.on("mouseover", parkNew);
+				layer.on("mouseout", parkOld);
+
+				layer.bindPopup("<img src='img/" + feature.properties.park_id + ".jpg' height='100' width='150'</img>" 
+					+ "<br><b>" + feature.properties.name + "</b>"
+					+ "<br>From " + feature.properties.starttime + " to " + feature.properties.endtime
+					+ "<br>" + feature.properties.address, {closeButton: false});
+				layer.on('mouseover', function(){layer.openPopup();});
+				layer.on('mouseout', function(){layer.closePopup();});
+			}
+
+			function vetStyle(feature) {
+				return {
+					color: "green"
+				};
+			}
+			
+			// Assigns new icon to vet markers.
+			function vetIcon(geoJsonPoint, latlng) {
+				var vetIcon = L.icon({
+					iconUrl: 'img/vet_icon.svg',
+					iconSize: [20, 20]
+				});
+				return L.marker(latlng, {icon: vetIcon});
+			}
+			
+			// Gives markers popups when hovered over.
+			function vetHover(feature, layer) {
+				layer.bindPopup("<b>" + feature.properties.name + "</b>"
+					+ "<br>From " + feature.properties.starttime + " to " + feature.properties.endtime
+					+ "<br>" + feature.properties.address, {closeButton: false});
+				layer.on('mouseover', function(){layer.openPopup();});
+				layer.on('mouseout', function(){layer.closePopup();});
+			}
+
+			function routeStyle(feature) {
+				return {
+					color: "#e56567",
+					dashArray: "5, 5"
+				};
+			}
+			
+			// Shows approximate walk time when hovering over route.
+			function routeHover(feature, layer) {
+				layer.bindPopup("<b>Walk time:</b><br>Approximately " + feature.properties.traveltime + " minutes", {closeButton: false});
+				layer.on('mouseover', function(){layer.openPopup();});
+				layer.on('mouseout', function(){layer.closePopup();});
+			}
+
+			function zoomToLayer() {
+				map.fitBounds([
+					[47.685963, -122.352212],
+					[47.618701, -122.280409]
+				]);
+			}
+			
+			// Shows and hides park layer when button is clicked.
+			function applyPark() {
+				if (map.hasLayer(parkLayer)) {
+					parkOff = true;
+					map.removeLayer(parkLayer);
+				} else if (map.getZoom() > 9) {
+					parkOff = false;
+					map.addLayer(parkLayer);
+				}
+
+				if (map.hasLayer(parkLayer) && map.hasLayer(vetLayer)) {
+					map.addLayer(routeLayer);
+				} else {
+					map.removeLayer(routeLayer);
+				}
+			}
+			
+			// Shows and hides vet layer when button is clicked.
+			function applyVet() {
+				if (map.hasLayer(vetLayer)) {
+					vetOff = true;
+					map.removeLayer(vetLayer);
+				} else if (map.getZoom() > 9) {
+					vetOff = false;
+					map.addLayer(vetLayer);
+				}
+
+				if (map.hasLayer(parkLayer) && map.hasLayer(vetLayer)) {
+					map.addLayer(routeLayer);
+				} else {
+					map.removeLayer(routeLayer);
+				}
+			}
+
+		</script>
+	</body>
+</html>
